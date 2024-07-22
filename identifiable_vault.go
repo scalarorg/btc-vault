@@ -294,16 +294,17 @@ func ParseV0VaultTx(
 	if len(expectedTag) != btcstaking.TagLen {
 		return nil, fmt.Errorf("invalid tag length: %d, expected: %d", len(expectedTag), btcstaking.TagLen)
 	}
+
 	if len(covenantKeys) == 0 {
 		return nil, fmt.Errorf("no covenant keys specified")
 	}
+
 	if covenantQuorum > uint32(len(covenantKeys)) {
 		return nil, fmt.Errorf("covenant quorum is greater than the number of covenant keys")
 	}
-
 	// 2. Identify whether the transaction has expected shape
-	if len(tx.TxOut) != 4 {
-		return nil, fmt.Errorf("staking tx must have 4 outputs")
+	if len(tx.TxOut) < 3 {
+		return nil, fmt.Errorf("staking tx must have at least 3 outputs")
 	}
 
 	// opReturnData, opReturnOutputIdx, err := tryToGetOpReturnDataFromOutputs(tx.TxOut)
@@ -315,7 +316,6 @@ func ParseV0VaultTx(
 		return nil, fmt.Errorf("transaction does not have expected v0 op return output")
 	}
 	PayloadOpReturnData, err := NewPayloadOpReturnDataFromTxOutput(tx.TxOut[2])
-
 	if err != nil {
 		return nil, fmt.Errorf("cannot parse payload op return data: %w", err)
 	}
@@ -351,12 +351,25 @@ func ParseV0VaultTx(
 	if err != nil {
 		return nil, fmt.Errorf("cannot build vault info: %w", err)
 	}
+
 	// vaultOutput, vaultOutputIdx, err := tryToGetVaultOutput(tx.TxOut, vaultInfo.vaultOutput.PkScript)
 	if !bytes.Equal(tx.TxOut[0].PkScript, vaultInfo.VaultOutput.PkScript) {
 		return nil, fmt.Errorf("transaction does not have expected vault output with format at index 0")
 	}
-	vaultOutput := tx.TxOut[0]
+	var vaultOutput *wire.TxOut
+	vaultOutput = tx.TxOut[0]
 	vaultOutputIdx := 0
+
+	// fmt.Println(vaultInfo.burnPathLeafHash)
+	// fmt.Println(vaultInfo.slashingOrLostKeyPathLeafHash)
+	// fmt.Println(vaultInfo.burnWithoutDAppPathLeafHash)
+	// fmt.Println(vaultInfo.scriptHolder)
+	// fmt.Println(vaultInfo.VaultOutput.Value)
+	// fmt.Println(vaultInfo.VaultOutput.PkScript)
+	// fmt.Println(tx.TxOut[0].PkScript)
+	// fmt.Println(vaultOutput)
+	// fmt.Println(vaultOutput.Value)
+	// fmt.Println(tx.TxOut[0].Value)
 
 	if vaultOutput == nil {
 		return nil, fmt.Errorf("staking output not found in potential staking transaction")
@@ -433,16 +446,13 @@ func IsPossibleV0VaultTx(tx *wire.MsgTx, expectedTag []byte) bool {
 	if len(expectedTag) != btcstaking.TagLen {
 		return false
 	}
-
-	if len(tx.TxOut) != 4 {
+	if len(tx.TxOut) < 3 {
 		return false
 	}
 	_, err := getV0OpReturnBytes(tx.TxOut[1])
-
 	if err != nil {
 		return false
 	}
-
 	_, err = getPayloadOPReturnBytes(tx.TxOut[2])
 
 	return err == nil

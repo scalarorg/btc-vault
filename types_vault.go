@@ -197,10 +197,10 @@ func (i *VaultInfo) BurnWithoutDAppPathSpendInfo() (*SpendInfo, error) {
 }
 
 type BurningInfo struct {
-	BurningOutput                 *wire.TxOut
-	scriptHolder                  *taprootScriptHolder
-	slashingOrLostKeyPathLeafHash chainhash.Hash
-	burnWithoutDAppPathLeafHash   chainhash.Hash
+	BurningOutput               *wire.TxOut
+	scriptHolder                *taprootScriptHolder
+	burningPathLeafHash         chainhash.Hash
+	burnWithoutDAppPathLeafHash chainhash.Hash
 }
 
 func BuildBurningInfo(
@@ -221,19 +221,19 @@ func BuildBurningInfo(
 	)
 
 	if err != nil {
-		return nil, fmt.Errorf("%s: %w", errBuildingUnbondingInfo, err)
+		return nil, fmt.Errorf("%s: %w", errBuildingBurningInfo, err)
 	}
 
-	var unbondingPaths [][]byte
-	unbondingPaths = append(unbondingPaths, scalarScripts.slashingOrLostKeyPathScript)
-	unbondingPaths = append(unbondingPaths, scalarScripts.burnWithoutDAppPathScript)
+	var burningPaths [][]byte
+	burningPaths = append(burningPaths, scalarScripts.burnPathScript)
+	burningPaths = append(burningPaths, scalarScripts.burnWithoutDAppPathScript)
 
-	slashingOrLostKeyLeafHash := txscript.NewBaseTapLeaf(scalarScripts.slashingOrLostKeyPathScript).TapHash()
+	burningPathLeafHash := txscript.NewBaseTapLeaf(scalarScripts.burnPathScript).TapHash()
 	burnWithoutDAppLeafHash := txscript.NewBaseTapLeaf(scalarScripts.burnWithoutDAppPathScript).TapHash()
 
 	sh, err := newTaprootScriptHolder(
 		&unspendableKeyPathKey,
-		unbondingPaths,
+		burningPaths,
 	)
 
 	if err != nil {
@@ -249,9 +249,17 @@ func BuildBurningInfo(
 	unbondingOutput := wire.NewTxOut(int64(burningAmount), taprootPkScript)
 
 	return &BurningInfo{
-		BurningOutput:                 unbondingOutput,
-		scriptHolder:                  sh,
-		slashingOrLostKeyPathLeafHash: slashingOrLostKeyLeafHash,
-		burnWithoutDAppPathLeafHash:   burnWithoutDAppLeafHash,
+		BurningOutput:               unbondingOutput,
+		scriptHolder:                sh,
+		burningPathLeafHash:         burningPathLeafHash,
+		burnWithoutDAppPathLeafHash: burnWithoutDAppLeafHash,
 	}, nil
+}
+
+func (i *BurningInfo) BurningPathSpendInfo() (*SpendInfo, error) {
+	return i.scriptHolder.scriptSpendInfoByName(i.burningPathLeafHash)
+}
+
+func (i *BurningInfo) BurnWithoutDAppPathSpendInfo() (*SpendInfo, error) {
+	return i.scriptHolder.scriptSpendInfoByName(i.burnWithoutDAppPathLeafHash)
 }
