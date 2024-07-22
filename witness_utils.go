@@ -1,4 +1,4 @@
-package btcminting
+package btcvault
 
 // Based on github.com/babylonchain/btcstaking/witness_utils.go
 
@@ -10,7 +10,6 @@ import (
 )
 
 func (si *SpendInfo) CreateBurnPathWitness(
-	covenantSigs []*schnorr.Signature,
 	dAppSig, delegatorSig *schnorr.Signature,
 ) (wire.TxWitness, error) {
 	if si == nil {
@@ -18,19 +17,6 @@ func (si *SpendInfo) CreateBurnPathWitness(
 	}
 
 	var witnessStack [][]byte
-
-	// add covenant signatures to witness stack
-	// NOTE: only a quorum number of covenant signatures needs to be non-nil
-	if len(covenantSigs) == 0 {
-		return nil, fmt.Errorf("covenant signatures should not be empty")
-	}
-	for _, covSig := range covenantSigs {
-		if covSig == nil {
-			witnessStack = append(witnessStack, []byte{})
-		} else {
-			witnessStack = append(witnessStack, covSig.Serialize())
-		}
-	}
 
 	// add dApp signature to witness stack
 	if dAppSig == nil {
@@ -52,6 +38,7 @@ func (si *SpendInfo) CreateBurnPathWitness(
 func (si *SpendInfo) CreateSlashingOrLostKeyPathWitness(
 	covenantSigs []*schnorr.Signature,
 	dAppSig *schnorr.Signature,
+	stakerSig *schnorr.Signature,
 ) (wire.TxWitness, error) {
 	if si == nil {
 		panic("cannot build witness without spend info")
@@ -78,6 +65,13 @@ func (si *SpendInfo) CreateSlashingOrLostKeyPathWitness(
 	}
 
 	witnessStack = append(witnessStack, dAppSig.Serialize())
+
+	// add staker signature to witness stack
+	if stakerSig == nil {
+		return nil, fmt.Errorf("staker signature should not be nil")
+	}
+
+	witnessStack = append(witnessStack, stakerSig.Serialize())
 
 	return CreateWitness(si, witnessStack)
 }

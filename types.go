@@ -1,4 +1,4 @@
-package btcminting
+package btcvault
 
 // Using the private method
 // from github.com/babylonchain/babylon/btcstaking/types.go

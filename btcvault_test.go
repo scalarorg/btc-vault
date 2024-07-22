@@ -1,4 +1,4 @@
-package btcminting_test
+package btcvault_test
 
 // based on github.com/babylonchain/btcstaking/btcstaking_test.go
 
@@ -17,7 +17,7 @@ import (
 	"github.com/btcsuite/btcd/chaincfg"
 	"github.com/btcsuite/btcd/txscript"
 	"github.com/btcsuite/btcd/wire"
-	"github.com/scalarorg/btcminting"
+	"github.com/scalarorg/btcvault"
 	"github.com/stretchr/testify/require"
 )
 
@@ -167,10 +167,9 @@ func GenerateSignatures(
 	return sigs
 }
 
-func TestSpendingBurningPathCovenant35MultiSig(t *testing.T) {
+func TestSpendingBurningPath(t *testing.T) {
 	r := rand.New(rand.NewSource(time.Now().Unix()))
 
-	// we are having here 3/5 covenant threshold sig
 	scenario := GenerateTestScenario(
 		r,
 		t,
@@ -180,7 +179,7 @@ func TestSpendingBurningPathCovenant35MultiSig(t *testing.T) {
 		btcutil.Amount(2*10e8),
 	)
 
-	mintingInfo, err := btcminting.BuildMintingInfo(
+	vaultInfo, err := btcvault.BuildVaultInfo(
 		scenario.StakerKey.PubKey(),
 		scenario.FinalityProviderPublicKeys(),
 		scenario.CovenantPublicKeys(),
@@ -192,37 +191,26 @@ func TestSpendingBurningPathCovenant35MultiSig(t *testing.T) {
 	require.NoError(t, err)
 
 	spendStakeTx := createSpendStakeTx(scenario.StakingAmount.MulF64(0.5))
-	si, err := mintingInfo.BurnPathSpendInfo()
+	si, err := vaultInfo.BurnPathSpendInfo()
 	require.NoError(t, err)
 
-	// generate staker signature, covenant signatures, and finality provider signature
+	// generate staker signature, and dApp signature
 	stakerSig, err := btcstaking.SignTxWithOneScriptSpendInputFromTapLeaf(
 		spendStakeTx,
-		mintingInfo.MintingOutput,
+		vaultInfo.VaultOutput,
 		scenario.StakerKey,
 		si.RevealedLeaf,
 	)
 	require.NoError(t, err)
-	covenantSigantures := GenerateSignatures(
-		t,
-		scenario.CovenantKeys,
-		spendStakeTx,
-		mintingInfo.MintingOutput,
-		si.RevealedLeaf,
-	)
 	dAppSig, err := btcstaking.SignTxWithOneScriptSpendInputFromTapLeaf(
 		spendStakeTx,
-		mintingInfo.MintingOutput,
+		vaultInfo.VaultOutput,
 		scenario.FinalityProviderKeys[0],
 		si.RevealedLeaf,
 	)
 	require.NoError(t, err)
 
-	covenantSigantures[0] = nil
-	covenantSigantures[3] = nil
-
 	witness, err := si.CreateBurnPathWitness(
-		covenantSigantures,
 		dAppSig,
 		stakerSig,
 	)
@@ -230,17 +218,18 @@ func TestSpendingBurningPathCovenant35MultiSig(t *testing.T) {
 	spendStakeTx.TxIn[0].Witness = witness
 
 	// now as we have finality provider signature execution should succeed
-	prevOutputFetcher := mintingInfo.GetOutputFetcher()
+	prevOutputFetcher := vaultInfo.GetOutputFetcher()
 	newEngine := func() (*txscript.Engine, error) {
 		return txscript.NewEngine(
-			mintingInfo.GetPkScript(),
+			vaultInfo.GetPkScript(),
 			spendStakeTx, 0, txscript.StandardVerifyFlags, nil,
-			txscript.NewTxSigHashes(spendStakeTx, prevOutputFetcher), mintingInfo.MintingOutput.Value,
+			txscript.NewTxSigHashes(spendStakeTx, prevOutputFetcher), vaultInfo.VaultOutput.Value,
 			prevOutputFetcher,
 		)
 	}
 	btctest.AssertEngineExecution(t, 0, true, newEngine)
 }
+
 func TestSpendingSlashingOrLostKeyPathCovenant35MultiSig(t *testing.T) {
 	r := rand.New(rand.NewSource(time.Now().Unix()))
 
@@ -254,7 +243,7 @@ func TestSpendingSlashingOrLostKeyPathCovenant35MultiSig(t *testing.T) {
 		btcutil.Amount(2*10e8),
 	)
 
-	mintingInfo, err := btcminting.BuildMintingInfo(
+	vaultInfo, err := btcvault.BuildVaultInfo(
 		scenario.StakerKey.PubKey(),
 		scenario.FinalityProviderPublicKeys(),
 		scenario.CovenantPublicKeys(),
@@ -267,22 +256,31 @@ func TestSpendingSlashingOrLostKeyPathCovenant35MultiSig(t *testing.T) {
 
 	spendStakeTx := createSpendStakeTx(scenario.StakingAmount.MulF64(0.5))
 
-	si, err := mintingInfo.SlashingOrLostKeyPathSpendInfo()
+	si, err := vaultInfo.SlashingOrLostKeyPathSpendInfo()
 	require.NoError(t, err)
 
-	// generate covenant signatures, and finality provider signature
+	// generate staker, covenant signatures, and finality provider signature
 
 	require.NoError(t, err)
+
+	stakerSig, err := btcstaking.SignTxWithOneScriptSpendInputFromTapLeaf(
+		spendStakeTx,
+		vaultInfo.VaultOutput,
+		scenario.StakerKey,
+		si.RevealedLeaf,
+	)
+	require.NoError(t, err)
+
 	covenantSigantures := GenerateSignatures(
 		t,
 		scenario.CovenantKeys,
 		spendStakeTx,
-		mintingInfo.MintingOutput,
+		vaultInfo.VaultOutput,
 		si.RevealedLeaf,
 	)
 	dAppSig, err := btcstaking.SignTxWithOneScriptSpendInputFromTapLeaf(
 		spendStakeTx,
-		mintingInfo.MintingOutput,
+		vaultInfo.VaultOutput,
 		scenario.FinalityProviderKeys[0],
 		si.RevealedLeaf,
 	)
@@ -294,92 +292,93 @@ func TestSpendingSlashingOrLostKeyPathCovenant35MultiSig(t *testing.T) {
 	witness, err := si.CreateSlashingOrLostKeyPathWitness(
 		covenantSigantures,
 		dAppSig,
-	)
-	require.NoError(t, err)
-	spendStakeTx.TxIn[0].Witness = witness
-
-	// now as we have finality provider signature execution should succeed
-	prevOutputFetcher := mintingInfo.GetOutputFetcher()
-	newEngine := func() (*txscript.Engine, error) {
-		return txscript.NewEngine(
-			mintingInfo.GetPkScript(),
-			spendStakeTx, 0, txscript.StandardVerifyFlags, nil,
-			txscript.NewTxSigHashes(spendStakeTx, prevOutputFetcher), mintingInfo.MintingOutput.Value,
-			prevOutputFetcher,
-		)
-	}
-	btctest.AssertEngineExecution(t, 0, true, newEngine)
-}
-
-func TestSpendingBurningWithOutDAppCovenant35MultiSig(t *testing.T) {
-	r := rand.New(rand.NewSource(time.Now().Unix()))
-
-	// we are having here 3/5 covenant threshold sig
-	scenario := GenerateTestScenario(
-		r,
-		t,
-		1,
-		5,
-		3,
-		btcutil.Amount(2*10e8),
-	)
-
-	mintingInfo, err := btcminting.BuildMintingInfo(
-		scenario.StakerKey.PubKey(),
-		scenario.FinalityProviderPublicKeys(),
-		scenario.CovenantPublicKeys(),
-		scenario.RequiredCovenantSigs,
-		scenario.StakingAmount,
-		&chaincfg.MainNetParams,
-	)
-
-	require.NoError(t, err)
-
-	spendStakeTx := createSpendStakeTx(scenario.StakingAmount.MulF64(0.5))
-
-	si, err := mintingInfo.BurnWithoutDAppPathSpendInfo()
-	require.NoError(t, err)
-
-	// generate covenant signatures, and finality provider signature
-
-	require.NoError(t, err)
-
-	stakerSig, err := btcstaking.SignTxWithOneScriptSpendInputFromTapLeaf(
-		spendStakeTx,
-		mintingInfo.MintingOutput,
-		scenario.StakerKey,
-		si.RevealedLeaf,
-	)
-
-	covenantSigantures := GenerateSignatures(
-		t,
-		scenario.CovenantKeys,
-		spendStakeTx,
-		mintingInfo.MintingOutput,
-		si.RevealedLeaf,
-	)
-
-	require.NoError(t, err)
-
-	covenantSigantures[2] = nil
-	covenantSigantures[4] = nil
-
-	witness, err := si.CreateBurnWithoutDAppPathWitness(
-		covenantSigantures,
 		stakerSig,
 	)
 	require.NoError(t, err)
 	spendStakeTx.TxIn[0].Witness = witness
 
 	// now as we have finality provider signature execution should succeed
-	prevOutputFetcher := mintingInfo.GetOutputFetcher()
+	prevOutputFetcher := vaultInfo.GetOutputFetcher()
 	newEngine := func() (*txscript.Engine, error) {
 		return txscript.NewEngine(
-			mintingInfo.GetPkScript(),
+			vaultInfo.GetPkScript(),
 			spendStakeTx, 0, txscript.StandardVerifyFlags, nil,
-			txscript.NewTxSigHashes(spendStakeTx, prevOutputFetcher), mintingInfo.MintingOutput.Value,
+			txscript.NewTxSigHashes(spendStakeTx, prevOutputFetcher), vaultInfo.VaultOutput.Value,
 			prevOutputFetcher,
 		)
 	}
 	btctest.AssertEngineExecution(t, 0, true, newEngine)
 }
+
+// func TestSpendingBurningWithOutDAppCovenant35MultiSig(t *testing.T) {
+// 	r := rand.New(rand.NewSource(time.Now().Unix()))
+
+// 	// we are having here 3/5 covenant threshold sig
+// 	scenario := GenerateTestScenario(
+// 		r,
+// 		t,
+// 		1,
+// 		5,
+// 		3,
+// 		btcutil.Amount(2*10e8),
+// 	)
+
+// 	vaultInfo, err := btcvault.BuildvaultInfo(
+// 		scenario.StakerKey.PubKey(),
+// 		scenario.FinalityProviderPublicKeys(),
+// 		scenario.CovenantPublicKeys(),
+// 		scenario.RequiredCovenantSigs,
+// 		scenario.StakingAmount,
+// 		&chaincfg.MainNetParams,
+// 	)
+
+// 	require.NoError(t, err)
+
+// 	spendStakeTx := createSpendStakeTx(scenario.StakingAmount.MulF64(0.5))
+
+// 	si, err := vaultInfo.BurnWithoutDAppPathSpendInfo()
+// 	require.NoError(t, err)
+
+// 	// generate covenant signatures, and finality provider signature
+
+// 	require.NoError(t, err)
+
+// 	stakerSig, err := btcstaking.SignTxWithOneScriptSpendInputFromTapLeaf(
+// 		spendStakeTx,
+// 		vaultInfo.vaultOutput,
+// 		scenario.StakerKey,
+// 		si.RevealedLeaf,
+// 	)
+
+// 	covenantSigantures := GenerateSignatures(
+// 		t,
+// 		scenario.CovenantKeys,
+// 		spendStakeTx,
+// 		vaultInfo.vaultOutput,
+// 		si.RevealedLeaf,
+// 	)
+
+// 	require.NoError(t, err)
+
+// 	covenantSigantures[2] = nil
+// 	covenantSigantures[4] = nil
+
+// 	witness, err := si.CreateBurnWithoutDAppPathWitness(
+// 		covenantSigantures,
+// 		stakerSig,
+// 	)
+// 	require.NoError(t, err)
+// 	spendStakeTx.TxIn[0].Witness = witness
+
+// 	// now as we have finality provider signature execution should succeed
+// 	prevOutputFetcher := vaultInfo.GetOutputFetcher()
+// 	newEngine := func() (*txscript.Engine, error) {
+// 		return txscript.NewEngine(
+// 			vaultInfo.GetPkScript(),
+// 			spendStakeTx, 0, txscript.StandardVerifyFlags, nil,
+// 			txscript.NewTxSigHashes(spendStakeTx, prevOutputFetcher), vaultInfo.vaultOutput.Value,
+// 			prevOutputFetcher,
+// 		)
+// 	}
+// 	btctest.AssertEngineExecution(t, 0, true, newEngine)
+// }

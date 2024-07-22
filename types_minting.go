@@ -1,4 +1,4 @@
-package btcminting
+package btcvault
 
 // Based on github.com/babylonchain/btcstaking/types.go
 
@@ -14,7 +14,7 @@ import (
 )
 
 var (
-	errBuildingMintingInfo = fmt.Errorf("error building minting info")
+	errBuildingVaultInfo   = fmt.Errorf("error building vault info")
 	errBuildingBurningInfo = fmt.Errorf("error building burning info")
 )
 
@@ -67,6 +67,12 @@ func newScalarScriptPaths(
 		return nil, err
 	}
 
+	fpSingleKeySigScripts, err := buildSingleKeySigScript(fpKeys[0], false)
+
+	if err != nil {
+		return nil, err
+	}
+
 	fpMultisigScript, err := buildMultiSigScript(
 		fpKeys,
 		// we always require only one dApp provider to sign
@@ -81,11 +87,11 @@ func newScalarScriptPaths(
 
 	burningPathScript := aggregateScripts(
 		stakerSigScript,
-		fpMultisigScript,
-		covenantMultisigScript,
+		fpSingleKeySigScripts,
 	)
 
 	slashingOrLostKeyPathScript := aggregateScripts(
+		stakerSigScript,
 		fpMultisigScript,
 		covenantMultisigScript,
 	)
@@ -102,8 +108,8 @@ func newScalarScriptPaths(
 	}, nil
 }
 
-type MintingInfo struct {
-	MintingOutput                 *wire.TxOut
+type VaultInfo struct {
+	VaultOutput                   *wire.TxOut
 	scriptHolder                  *taprootScriptHolder
 	burnPathLeafHash              chainhash.Hash
 	slashingOrLostKeyPathLeafHash chainhash.Hash
@@ -111,25 +117,25 @@ type MintingInfo struct {
 }
 
 // GetPkScript returns the full staking taproot pkscript in the corresponding staking tx
-func (sti *MintingInfo) GetPkScript() []byte {
-	return sti.MintingOutput.PkScript
+func (sti *VaultInfo) GetPkScript() []byte {
+	return sti.VaultOutput.PkScript
 }
 
 // GetOutputFetcher returns the fetcher of the staking tx's output
-func (sti *MintingInfo) GetOutputFetcher() *txscript.CannedPrevOutputFetcher {
+func (sti *VaultInfo) GetOutputFetcher() *txscript.CannedPrevOutputFetcher {
 	return txscript.NewCannedPrevOutputFetcher(
-		sti.GetPkScript(), sti.MintingOutput.Value,
+		sti.GetPkScript(), sti.VaultOutput.Value,
 	)
 }
 
-func BuildMintingInfo(
+func BuildVaultInfo(
 	stakerKey *btcec.PublicKey,
 	fpKeys []*btcec.PublicKey,
 	covenantKeys []*btcec.PublicKey,
 	covenantQuorum uint32,
 	stakingAmount btcutil.Amount,
 	net *chaincfg.Params,
-) (*MintingInfo, error) {
+) (*VaultInfo, error) {
 	unspendableKeyPathKey := unspendableKeyPathInternalPubKey()
 
 	scalarScripts, err := newScalarScriptPaths(
@@ -140,7 +146,7 @@ func BuildMintingInfo(
 	)
 
 	if err != nil {
-		return nil, fmt.Errorf("%s: %w", errBuildingMintingInfo, err)
+		return nil, fmt.Errorf("%s: %w", errBuildingVaultInfo, err)
 	}
 
 	var unbondingPaths [][]byte
@@ -158,19 +164,19 @@ func BuildMintingInfo(
 	)
 
 	if err != nil {
-		return nil, fmt.Errorf("%s: %w", errBuildingMintingInfo, err)
+		return nil, fmt.Errorf("%s: %w", errBuildingVaultInfo, err)
 	}
 
 	taprootPkScript, err := sh.taprootPkScript(net)
 
 	if err != nil {
-		return nil, fmt.Errorf("%s: %w", errBuildingMintingInfo, err)
+		return nil, fmt.Errorf("%s: %w", errBuildingVaultInfo, err)
 	}
 
-	mintingOutput := wire.NewTxOut(int64(stakingAmount), taprootPkScript)
+	vaultOutput := wire.NewTxOut(int64(stakingAmount), taprootPkScript)
 
-	return &MintingInfo{
-		MintingOutput:                 mintingOutput,
+	return &VaultInfo{
+		VaultOutput:                   vaultOutput,
 		scriptHolder:                  sh,
 		burnPathLeafHash:              burnPathLeafHash,
 		slashingOrLostKeyPathLeafHash: slashingOrLostKeyPathLeafHash,
@@ -178,15 +184,15 @@ func BuildMintingInfo(
 	}, nil
 }
 
-func (i *MintingInfo) BurnPathSpendInfo() (*SpendInfo, error) {
+func (i *VaultInfo) BurnPathSpendInfo() (*SpendInfo, error) {
 	return i.scriptHolder.scriptSpendInfoByName(i.burnPathLeafHash)
 }
 
-func (i *MintingInfo) SlashingOrLostKeyPathSpendInfo() (*SpendInfo, error) {
+func (i *VaultInfo) SlashingOrLostKeyPathSpendInfo() (*SpendInfo, error) {
 	return i.scriptHolder.scriptSpendInfoByName(i.slashingOrLostKeyPathLeafHash)
 }
 
-func (i *MintingInfo) BurnWithoutDAppPathSpendInfo() (*SpendInfo, error) {
+func (i *VaultInfo) BurnWithoutDAppPathSpendInfo() (*SpendInfo, error) {
 	return i.scriptHolder.scriptSpendInfoByName(i.burnWithoutDAppPathLeafHash)
 }
 

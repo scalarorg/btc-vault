@@ -1,11 +1,11 @@
-package btcminting_test
+package btcvault_test
 
 import (
 	"math/rand"
 	"testing"
 
 	"github.com/babylonchain/babylon/btcstaking"
-	"github.com/scalarorg/btcminting"
+	"github.com/scalarorg/btcvault"
 
 	"github.com/btcsuite/btcd/btcec/v2/schnorr"
 	"github.com/btcsuite/btcd/btcutil"
@@ -16,9 +16,9 @@ import (
 	"github.com/babylonchain/babylon/testutil/datagen"
 )
 
-func generateTxFromOutputs(r *rand.Rand, info *btcminting.IdentifiableMintingInfo) *wire.MsgTx {
+func generateTxFromOutputs(r *rand.Rand, info *btcvault.IdentifiableVaultInfo) *wire.MsgTx {
 	tx := wire.NewMsgTx(2)
-	tx.AddTxOut(info.MintingOutput)
+	tx.AddTxOut(info.VaultOutput)
 	tx.AddTxOut(info.OpReturnOutput)
 	tx.AddTxOut(info.PayloadOutput)
 	tx.AddTxOut(wire.NewTxOut((r.Int63n(1000000000) + 10000), datagen.GenRandomByteArray(r, 32)))
@@ -43,7 +43,7 @@ func FuzzGenerateAndParseValidV0StakingTransaction(f *testing.F) {
 		chainID := datagen.GenRandomByteArray(r, 8)
 		chainIdUserAddress := datagen.GenRandomByteArray(r, 20)
 		chainIdSmartContractAddress := datagen.GenRandomByteArray(r, 20)
-		mintingAmount := datagen.GenRandomByteArray(r, 32)
+		vaultAmount := datagen.GenRandomByteArray(r, 32)
 		sc := GenerateTestScenario(r, t, 1, numCovenantKeys, quroum, stakingAmount)
 		// check value each field
 		// fmt.Print("tag: ", tag, "\n")
@@ -52,12 +52,12 @@ func FuzzGenerateAndParseValidV0StakingTransaction(f *testing.F) {
 		// fmt.Print("chainID: ", chainID, "\n")
 		// fmt.Print("chainIdUserAddress: ", chainIdUserAddress, "\n")
 		// fmt.Print("chainIdSmartContractAddress: ", chainIdSmartContractAddress, "\n")
-		// fmt.Print("mintingAmount: ", mintingAmount, "\n")
+		// fmt.Print("vaultAmount: ", vaultAmount, "\n")
 		// fmt.Print("sc.StakerKey: ", sc.StakerKey, "\n")
 		// fmt.Print("sc.FinalityProviderKeys[0]: ", sc.FinalityProviderKeys[0], "\n")
 		// fmt.Print("sc.CovenantPublicKeys(): ", sc.CovenantPublicKeys(), "\n")
 		// fmt.Print("sc.FinalityProviderKeys[0].PubKey(): ", sc.FinalityProviderKeys[0].PubKey(), "\n")
-		outputs, err := btcminting.BuildV0IdentifiableMintingOutputs(
+		outputs, err := btcvault.BuildV0IdentifiableVaultOutputs(
 			tag,
 			sc.StakerKey.PubKey(),
 			sc.FinalityProviderKeys[0].PubKey(),
@@ -67,7 +67,7 @@ func FuzzGenerateAndParseValidV0StakingTransaction(f *testing.F) {
 			chainID,
 			chainIdUserAddress,
 			chainIdSmartContractAddress,
-			mintingAmount,
+			vaultAmount,
 			net,
 		)
 
@@ -78,8 +78,8 @@ func FuzzGenerateAndParseValidV0StakingTransaction(f *testing.F) {
 		tx := generateTxFromOutputs(r, outputs)
 		// ParseV0StakingTx and IsPossibleV0StakingTx should be consistent and recognize
 		// the same tx as a valid staking tx
-		require.True(t, btcminting.IsPossibleV0MintingTx(tx, tag))
-		parsedTx, err := btcminting.ParseV0MintingTx(
+		require.True(t, btcvault.IsPossibleV0VaultTx(tx, tag))
+		parsedTx, err := btcvault.ParseV0VaultTx(
 			tx,
 			tag,
 			sc.CovenantPublicKeys(),
@@ -89,9 +89,9 @@ func FuzzGenerateAndParseValidV0StakingTransaction(f *testing.F) {
 		require.NoError(t, err)
 		require.NotNil(t, parsedTx)
 
-		// test minting address
-		require.Equal(t, outputs.MintingOutput.PkScript, parsedTx.MintingOutput.PkScript)
-		require.Equal(t, outputs.MintingOutput.Value, parsedTx.MintingOutput.Value)
+		// test vault address
+		require.Equal(t, outputs.VaultOutput.PkScript, parsedTx.VaultOutput.PkScript)
+		require.Equal(t, outputs.VaultOutput.Value, parsedTx.VaultOutput.Value)
 
 		// test first op_return
 		require.Equal(t, outputs.OpReturnOutput.PkScript, parsedTx.OpReturnOutput.PkScript)
@@ -105,11 +105,11 @@ func FuzzGenerateAndParseValidV0StakingTransaction(f *testing.F) {
 		require.Equal(t, outputs.PayloadOutput.PkScript, parsedTx.PayloadOutput.PkScript)
 		require.Equal(t, outputs.PayloadOutput.Value, parsedTx.PayloadOutput.Value)
 
-		// test chainID, chainIdUserAddress, chainIdSmartContractAddress, mintingAmount
+		// test chainID, chainIdUserAddress, chainIdSmartContractAddress, vaultAmount
 		require.Equal(t, chainID, parsedTx.PayloadOpReturnData.ChainID)
 		require.Equal(t, chainIdUserAddress, parsedTx.PayloadOpReturnData.ChainIdUserAddress)
 		require.Equal(t, chainIdSmartContractAddress, parsedTx.PayloadOpReturnData.ChainIdSmartContractAddress)
-		require.Equal(t, mintingAmount, parsedTx.PayloadOpReturnData.Amount)
+		require.Equal(t, vaultAmount, parsedTx.PayloadOpReturnData.Amount)
 
 		// test finality provider and covenant keys
 		require.Equal(t, schnorr.SerializePubKey(sc.StakerKey.PubKey()), parsedTx.OpReturnData.StakerPublicKey.Marshall())

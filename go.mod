@@ -1,4 +1,4 @@
-module github.com/scalarorg/btcminting
+module github.com/scalarorg/btcvault
 
 go 1.22.5
 
