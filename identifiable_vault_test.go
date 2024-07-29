@@ -5,7 +5,7 @@ import (
 	"testing"
 
 	"github.com/babylonchain/babylon/btcstaking"
-	"github.com/scalarorg/btcvault"
+	btcvault "github.com/scalarorg/btc-vault"
 
 	"github.com/btcsuite/btcd/btcec/v2/schnorr"
 	"github.com/btcsuite/btcd/btcutil"
