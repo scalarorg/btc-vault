@@ -310,7 +310,7 @@ func ParseV0VaultTx(
 	// opReturnData, opReturnOutputIdx, err := tryToGetOpReturnDataFromOutputs(tx.TxOut)
 	opReturnData, err := NewV0OpReturnDataFromTxOutput(tx.TxOut[1])
 	if err != nil {
-		return nil, fmt.Errorf("cannot parse v0 op return staking transaction: %w", err)
+		return nil, fmt.Errorf("cannot parse v0 op return vault transaction: %w", err)
 	}
 	if opReturnData == nil {
 		return nil, fmt.Errorf("transaction does not have expected v0 op return output")
@@ -356,8 +356,7 @@ func ParseV0VaultTx(
 	if !bytes.Equal(tx.TxOut[0].PkScript, vaultInfo.VaultOutput.PkScript) {
 		return nil, fmt.Errorf("transaction does not have expected vault output with format at index 0")
 	}
-	var vaultOutput *wire.TxOut
-	vaultOutput = tx.TxOut[0]
+	var vaultOutput *wire.TxOut = tx.TxOut[0]
 	vaultOutputIdx := 0
 
 	// fmt.Println(vaultInfo.burnPathLeafHash)

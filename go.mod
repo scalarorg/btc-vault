@@ -1,6 +1,6 @@
-module github.com/scalarorg/btcvault
+module github.com/scalarorg/btc-vault
 
-go 1.22.5
+go 1.22.3
 
 require github.com/babylonchain/babylon v0.9.0-rc.3.0.20240719052512-66d213148a02
 

@@ -1,6 +1,6 @@
 package btcvault
 
-// Based on github.com/babylonchain/btcstaking/witness_utils.go
+// Based on https://github.com/babylonchain/babylon/blob/dev/btcstaking/witness_utils.go
 
 import (
 	"fmt"

@@ -17,7 +17,7 @@ import (
 	"github.com/btcsuite/btcd/chaincfg"
 	"github.com/btcsuite/btcd/txscript"
 	"github.com/btcsuite/btcd/wire"
-	"github.com/scalarorg/btcvault"
+	btcvault "github.com/scalarorg/btc-vault"
 	"github.com/stretchr/testify/require"
 )
 
