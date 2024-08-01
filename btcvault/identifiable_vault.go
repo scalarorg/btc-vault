@@ -22,7 +22,7 @@ const (
 	chainIdBytes                     = 8
 	ChainIdUserAddressBytes          = 20
 	ChainIdSmartContractAddressBytes = 20
-	AmountBytes                      = 32
+	AmountBytes                      = 16
 
 	v0OpReturnCreationErrMsg = "cannot create V0 op_return data"
 )
@@ -67,8 +67,8 @@ func NewPayloadOpReturnData(
 	if len(chainIdSmartContractAddress) != ChainIdSmartContractAddressBytes {
 		return nil, fmt.Errorf("invalid chain id smart contract address length: %d, expected: %d", len(chainIdSmartContractAddress), ChainIdSmartContractAddressBytes)
 	}
-	if len(amount) != AmountBytes {
-		return nil, fmt.Errorf("invalid amount length: %d, expected: %d", len(amount), AmountBytes)
+	if len(amount) > AmountBytes {
+		return nil, fmt.Errorf("invalid amount length: %d, expected smaller than: %d", len(amount), AmountBytes)
 	}
 	return NewPayloadOpReturnDataFromParsed(chainID, chainIdUserAddress, chainIdSmartContractAddress, amount)
 }
