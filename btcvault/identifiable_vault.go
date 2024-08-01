@@ -112,7 +112,7 @@ func getPayloadOPReturnBytes(out *wire.TxOut) ([]byte, error) {
 	if !txscript.IsNullData(out.PkScript) {
 		return nil, fmt.Errorf("invalid op return script")
 	}
-	return out.PkScript[3:], nil
+	return out.PkScript[2:], nil
 }
 
 func NewPayloadOpReturnDataFromTxOutput(out *wire.TxOut) (*PayloadOpReturnData, error) {
