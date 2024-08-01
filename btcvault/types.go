@@ -13,7 +13,6 @@ import (
 	"github.com/btcsuite/btcd/chaincfg"
 	"github.com/btcsuite/btcd/chaincfg/chainhash"
 	"github.com/btcsuite/btcd/txscript"
-	"github.com/btcsuite/btcd/wire"
 )
 
 const (
@@ -172,31 +171,6 @@ func (t *taprootScriptHolder) taprootPkScript(net *chaincfg.Params) ([]byte, err
 		t.scriptTree,
 		t.internalPubKey,
 		net,
-	)
-}
-
-// Package responsible for different kinds of btc scripts used by babylon
-// Staking script has 3 spending paths:
-// 1. Staker can spend after relative time lock - staking
-// 2. Staker can spend with covenat cooperation any time
-// 3. Staker can spend with finality provider and covenant cooperation any time.
-type StakingInfo struct {
-	StakingOutput         *wire.TxOut
-	scriptHolder          *taprootScriptHolder
-	timeLockPathLeafHash  chainhash.Hash
-	unbondingPathLeafHash chainhash.Hash
-	slashingPathLeafHash  chainhash.Hash
-}
-
-// GetPkScript returns the full staking taproot pkscript in the corresponding staking tx
-func (sti *StakingInfo) GetPkScript() []byte {
-	return sti.StakingOutput.PkScript
-}
-
-// GetOutputFetcher returns the fetcher of the staking tx's output
-func (sti *StakingInfo) GetOutputFetcher() *txscript.CannedPrevOutputFetcher {
-	return txscript.NewCannedPrevOutputFetcher(
-		sti.GetPkScript(), sti.StakingOutput.Value,
 	)
 }
 

@@ -104,20 +104,6 @@ func buildMultiSigScript(
 	return assembleMultiSigScript(sortedKeys, threshold, withVerify)
 }
 
-// Only holder of private key for given pubKey can spend after relative lock time
-// SCRIPT: <StakerPk> OP_CHECKSIGVERIFY <stakingTime> OP_CHECKSEQUENCEVERIFY
-func buildTimeLockScript(
-	pubKey *btcec.PublicKey,
-	lockTime uint16,
-) ([]byte, error) {
-	builder := txscript.NewScriptBuilder()
-	builder.AddData(schnorr.SerializePubKey(pubKey))
-	builder.AddOp(txscript.OP_CHECKSIGVERIFY)
-	builder.AddInt64(int64(lockTime))
-	builder.AddOp(txscript.OP_CHECKSEQUENCEVERIFY)
-	return builder.Script()
-}
-
 // Only holder of private key for given pubKey can spend
 // SCRIPT: <pubKey> OP_CHECKSIGVERIFY
 func buildSingleKeySigScript(
