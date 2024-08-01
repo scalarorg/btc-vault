@@ -32,7 +32,7 @@ func magicHash(msg string) chainhash.Hash {
 
 func Sign(sk *btcec.PrivateKey, msg string) ([]byte, error) {
 	msgHash := magicHash(msg)
-	return ecdsa.SignCompact(sk, msgHash[:], true), nil
+	return ecdsa.SignCompact(sk, msgHash[:], true)
 }
 
 func Verify(pk *btcec.PublicKey, msg string, sigBytes []byte) error {
