@@ -2,10 +2,10 @@ package btcvault
 
 import (
 	"bytes"
+	"encoding/binary"
 	"encoding/hex"
 	"fmt"
 
-	"github.com/babylonchain/babylon/btcstaking"
 	"github.com/btcsuite/btcd/btcec/v2"
 	"github.com/btcsuite/btcd/btcec/v2/schnorr"
 	"github.com/btcsuite/btcd/btcutil"
@@ -16,13 +16,30 @@ import (
 )
 
 const (
+	TagLen                           = 4
 	V0OpReturnDataSize               = 69
 	PayloadOpReturnDataSize          = 80
 	chainIdBytes                     = 8
 	ChainIdUserAddressBytes          = 20
 	ChainIdSmartContractAddressBytes = 20
 	AmountBytes                      = 32
+
+	v0OpReturnCreationErrMsg = "cannot create V0 op_return data"
 )
+
+func uint16ToBytes(v uint16) []byte {
+	var buf [2]byte
+	binary.BigEndian.PutUint16(buf[:], v)
+	return buf[:]
+}
+
+func uint16FromBytes(b []byte) (uint16, error) {
+	if len(b) != 2 {
+		return 0, fmt.Errorf("invalid uint16 bytes length: %d", len(b))
+	}
+
+	return binary.BigEndian.Uint16(b), nil
+}
 
 type IdentifiableVaultInfo struct {
 	VaultOutput                   *wire.TxOut
@@ -123,7 +140,73 @@ func (d *PayloadOpReturnData) PayloadMarshall() []byte {
 	return data
 }
 
-func Marshall(d *btcstaking.V0OpReturnData) []byte {
+type V0OpReturnData struct {
+	Tag                       []byte
+	Version                   byte
+	StakerPublicKey           *XonlyPubKey
+	FinalityProviderPublicKey *XonlyPubKey
+	StakingTime               uint16
+}
+
+func NewV0OpReturnData(
+	tag []byte,
+	stakerPublicKey []byte,
+	finalityProviderPublicKey []byte,
+	stakingTime []byte,
+) (*V0OpReturnData, error) {
+	if len(tag) != TagLen {
+		return nil, fmt.Errorf("%s: invalid tag length: %d, expected: %d", v0OpReturnCreationErrMsg, len(tag), TagLen)
+	}
+
+	stakerKey, err := XOnlyPublicKeyFromBytes(stakerPublicKey)
+
+	if err != nil {
+		return nil, fmt.Errorf("%s:invalid staker public key:%w", v0OpReturnCreationErrMsg, err)
+	}
+
+	fpKey, err := XOnlyPublicKeyFromBytes(finalityProviderPublicKey)
+
+	if err != nil {
+		return nil, fmt.Errorf("%s:invalid finality provider public key:%w", v0OpReturnCreationErrMsg, err)
+	}
+
+	stakingTimeValue, err := uint16FromBytes(stakingTime)
+
+	if err != nil {
+		return nil, fmt.Errorf("%s:invalid staking time:%w", v0OpReturnCreationErrMsg, err)
+	}
+
+	return NewV0OpReturnDataFromParsed(tag, stakerKey.PubKey, fpKey.PubKey, stakingTimeValue)
+}
+
+func NewV0OpReturnDataFromParsed(
+	tag []byte,
+	stakerPublicKey *btcec.PublicKey,
+	finalityProviderPublicKey *btcec.PublicKey,
+	stakingTime uint16,
+) (*V0OpReturnData, error) {
+	if len(tag) != TagLen {
+		return nil, fmt.Errorf("%s:invalid tag length: %d, expected: %d", v0OpReturnCreationErrMsg, len(tag), TagLen)
+	}
+
+	if stakerPublicKey == nil {
+		return nil, fmt.Errorf("%s:nil staker public key", v0OpReturnCreationErrMsg)
+	}
+
+	if finalityProviderPublicKey == nil {
+		return nil, fmt.Errorf("%s: nil finality provider public key", v0OpReturnCreationErrMsg)
+	}
+
+	return &V0OpReturnData{
+		Tag:                       tag,
+		Version:                   0,
+		StakerPublicKey:           &XonlyPubKey{stakerPublicKey},
+		FinalityProviderPublicKey: &XonlyPubKey{finalityProviderPublicKey},
+		StakingTime:               stakingTime,
+	}, nil
+}
+
+func Marshall(d *V0OpReturnData) []byte {
 	var data []byte
 	data = append(data, d.Tag...)
 	data = append(data, d.Version)
@@ -132,7 +215,7 @@ func Marshall(d *btcstaking.V0OpReturnData) []byte {
 	return data
 }
 
-func DataToTxOutput(d *btcstaking.V0OpReturnData) (*wire.TxOut, error) {
+func DataToTxOutput(d *V0OpReturnData) (*wire.TxOut, error) {
 	dataScript, err := txscript.NullDataScript(Marshall(d))
 	if err != nil {
 		return nil, err
@@ -148,7 +231,6 @@ func (d *PayloadOpReturnData) PayloadDataToTxOutput() (*wire.TxOut, error) {
 	return wire.NewTxOut(0, dataScript), nil
 }
 
-// TODO(Hoang): Change minnting to vault creation.
 // BuildV0IdentifiableVaultOutputs creates outputs which every vault creation transaction must have
 func BuildV0IdentifiableVaultOutputs(
 	tag []byte,
@@ -177,7 +259,7 @@ func BuildV0IdentifiableVaultOutputs(
 		return nil, err
 	}
 
-	V0OpReturnData, err := btcstaking.NewV0OpReturnDataFromParsed(tag, stakerKey, dAppKey, 0)
+	V0OpReturnData, err := NewV0OpReturnDataFromParsed(tag, stakerKey, dAppKey, 0)
 
 	if err != nil {
 		return nil, err
@@ -270,7 +352,7 @@ type ParsedV0VaultTx struct {
 	VaultOutputIdx      int
 	OpReturnOutput      *wire.TxOut
 	OpReturnOutputIdx   int
-	OpReturnData        *btcstaking.V0OpReturnData
+	OpReturnData        *V0OpReturnData
 	PayloadOutput       *wire.TxOut
 	PayloadOutputIdx    int
 	PayloadOpReturnData *PayloadOpReturnData
@@ -291,8 +373,8 @@ func ParseV0VaultTx(
 		return nil, fmt.Errorf("nil tx")
 	}
 
-	if len(expectedTag) != btcstaking.TagLen {
-		return nil, fmt.Errorf("invalid tag length: %d, expected: %d", len(expectedTag), btcstaking.TagLen)
+	if len(expectedTag) != TagLen {
+		return nil, fmt.Errorf("invalid tag length: %d, expected: %d", len(expectedTag), TagLen)
 	}
 
 	if len(covenantKeys) == 0 {
@@ -407,8 +489,7 @@ func getV0OpReturnBytes(out *wire.TxOut) ([]byte, error) {
 }
 
 // we need to change V0OpReturnDataSize to 69
-func NewV0OpReturnDataFromBytes(b []byte) (*btcstaking.V0OpReturnData, error) {
-	const TagLen = btcstaking.TagLen
+func NewV0OpReturnDataFromBytes(b []byte) (*V0OpReturnData, error) {
 	if len(b) != V0OpReturnDataSize {
 		return nil, fmt.Errorf("invalid op return data length: %d, expected: %d", len(b), V0OpReturnDataSize)
 	}
@@ -422,10 +503,10 @@ func NewV0OpReturnDataFromBytes(b []byte) (*btcstaking.V0OpReturnData, error) {
 	stakerPublicKey := b[TagLen+1 : TagLen+1+schnorr.PubKeyBytesLen]
 	finalityProviderPublicKey := b[TagLen+1+schnorr.PubKeyBytesLen : TagLen+1+schnorr.PubKeyBytesLen*2]
 
-	return btcstaking.NewV0OpReturnData(tag, stakerPublicKey, finalityProviderPublicKey, []byte{0, 0})
+	return NewV0OpReturnData(tag, stakerPublicKey, finalityProviderPublicKey, []byte{0, 0})
 }
 
-func NewV0OpReturnDataFromTxOutput(out *wire.TxOut) (*btcstaking.V0OpReturnData, error) {
+func NewV0OpReturnDataFromTxOutput(out *wire.TxOut) (*V0OpReturnData, error) {
 	data, err := getV0OpReturnBytes(out)
 	if err != nil {
 		return nil, fmt.Errorf("cannot parse op return data: %w", err)
@@ -443,7 +524,7 @@ func NewV0OpReturnDataFromTxOutput(out *wire.TxOut) (*btcstaking.V0OpReturnData,
 // This function is much faster than ParseV0StakingTx, as it does not perform
 // all necessary checks.
 func IsPossibleV0VaultTx(tx *wire.MsgTx, expectedTag []byte) bool {
-	if len(expectedTag) != btcstaking.TagLen {
+	if len(expectedTag) != TagLen {
 		return false
 	}
 	if len(tx.TxOut) < 3 {

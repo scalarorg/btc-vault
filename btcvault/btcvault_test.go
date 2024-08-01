@@ -9,15 +9,14 @@ import (
 	"testing"
 	"time"
 
-	"github.com/babylonchain/babylon/btcstaking"
-	btctest "github.com/babylonchain/babylon/testutil/bitcoin"
 	"github.com/btcsuite/btcd/btcec/v2"
 	"github.com/btcsuite/btcd/btcec/v2/schnorr"
 	"github.com/btcsuite/btcd/btcutil"
 	"github.com/btcsuite/btcd/chaincfg"
 	"github.com/btcsuite/btcd/txscript"
 	"github.com/btcsuite/btcd/wire"
-	"github.com/scalarorg/btcvault"
+	"github.com/scalarorg/btc-vault/btcvault"
+	btctest "github.com/scalarorg/btc-vault/testutil/bitcoin"
 	"github.com/stretchr/testify/require"
 )
 
@@ -140,7 +139,7 @@ func GenerateSignatures(
 
 	for _, key := range keys {
 		pubKey := key.PubKey()
-		sig, err := btcstaking.SignTxWithOneScriptSpendInputFromTapLeaf(
+		sig, err := btcvault.SignTxWithOneScriptSpendInputFromTapLeaf(
 			tx,
 			stakingOutput,
 			key,
@@ -195,14 +194,14 @@ func TestSpendingBurningPath(t *testing.T) {
 	require.NoError(t, err)
 
 	// generate staker signature, and dApp signature
-	stakerSig, err := btcstaking.SignTxWithOneScriptSpendInputFromTapLeaf(
+	stakerSig, err := btcvault.SignTxWithOneScriptSpendInputFromTapLeaf(
 		spendStakeTx,
 		vaultInfo.VaultOutput,
 		scenario.StakerKey,
 		si.RevealedLeaf,
 	)
 	require.NoError(t, err)
-	dAppSig, err := btcstaking.SignTxWithOneScriptSpendInputFromTapLeaf(
+	dAppSig, err := btcvault.SignTxWithOneScriptSpendInputFromTapLeaf(
 		spendStakeTx,
 		vaultInfo.VaultOutput,
 		scenario.FinalityProviderKeys[0],
@@ -263,7 +262,7 @@ func TestSpendingSlashingOrLostKeyPathCovenant35MultiSig(t *testing.T) {
 
 	require.NoError(t, err)
 
-	stakerSig, err := btcstaking.SignTxWithOneScriptSpendInputFromTapLeaf(
+	stakerSig, err := btcvault.SignTxWithOneScriptSpendInputFromTapLeaf(
 		spendStakeTx,
 		vaultInfo.VaultOutput,
 		scenario.StakerKey,
@@ -278,7 +277,7 @@ func TestSpendingSlashingOrLostKeyPathCovenant35MultiSig(t *testing.T) {
 		vaultInfo.VaultOutput,
 		si.RevealedLeaf,
 	)
-	dAppSig, err := btcstaking.SignTxWithOneScriptSpendInputFromTapLeaf(
+	dAppSig, err := btcvault.SignTxWithOneScriptSpendInputFromTapLeaf(
 		spendStakeTx,
 		vaultInfo.VaultOutput,
 		scenario.FinalityProviderKeys[0],
@@ -343,7 +342,7 @@ func TestSpendingSlashingOrLostKeyPathCovenant35MultiSig(t *testing.T) {
 
 // 	require.NoError(t, err)
 
-// 	stakerSig, err := btcstaking.SignTxWithOneScriptSpendInputFromTapLeaf(
+// 	stakerSig, err := btcvault.SignTxWithOneScriptSpendInputFromTapLeaf(
 // 		spendStakeTx,
 // 		vaultInfo.vaultOutput,
 // 		scenario.StakerKey,

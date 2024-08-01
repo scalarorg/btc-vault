@@ -4,8 +4,7 @@ import (
 	"math/rand"
 	"testing"
 
-	"github.com/babylonchain/babylon/btcstaking"
-	"github.com/scalarorg/btcvault"
+	"github.com/scalarorg/btc-vault/btcvault"
 
 	"github.com/btcsuite/btcd/btcec/v2/schnorr"
 	"github.com/btcsuite/btcd/btcutil"
@@ -13,7 +12,7 @@ import (
 	"github.com/btcsuite/btcd/wire"
 	"github.com/stretchr/testify/require"
 
-	"github.com/babylonchain/babylon/testutil/datagen"
+	"github.com/scalarorg/btc-vault/testutil/datagen"
 )
 
 func generateTxFromOutputs(r *rand.Rand, info *btcvault.IdentifiableVaultInfo) *wire.MsgTx {
@@ -38,7 +37,7 @@ func FuzzGenerateAndParseValidV0StakingTransaction(f *testing.F) {
 		numCovenantKeys := uint32(r.Int31n(7) + 3)
 		quroum := uint32(r.Intn(int(numCovenantKeys)) + 1)
 		stakingAmount := btcutil.Amount(r.Int63n(1000000000) + 10000)
-		tag := datagen.GenRandomByteArray(r, btcstaking.TagLen)
+		tag := datagen.GenRandomByteArray(r, btcvault.TagLen)
 		net := &chaincfg.MainNetParams
 		chainID := datagen.GenRandomByteArray(r, 8)
 		chainIdUserAddress := datagen.GenRandomByteArray(r, 20)
