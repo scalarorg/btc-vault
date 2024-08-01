@@ -18,7 +18,7 @@ import (
 const (
 	TagLen                           = 4
 	V0OpReturnDataSize               = 69
-	PayloadOpReturnDataSize          = 80
+	Max_PayloadOpReturnDataSize      = 64
 	chainIdBytes                     = 8
 	ChainIdUserAddressBytes          = 20
 	ChainIdSmartContractAddressBytes = 20
@@ -26,12 +26,6 @@ const (
 
 	v0OpReturnCreationErrMsg = "cannot create V0 op_return data"
 )
-
-func uint16ToBytes(v uint16) []byte {
-	var buf [2]byte
-	binary.BigEndian.PutUint16(buf[:], v)
-	return buf[:]
-}
 
 func uint16FromBytes(b []byte) (uint16, error) {
 	if len(b) != 2 {
@@ -94,8 +88,8 @@ func NewPayloadOpReturnDataFromParsed(
 }
 
 func NewPayloadOpReturnDataFromBytes(b []byte) (*PayloadOpReturnData, error) {
-	if len(b) != PayloadOpReturnDataSize {
-		return nil, fmt.Errorf("invalid payload op return data length: %d, expected: %d", len(b), PayloadOpReturnDataSize)
+	if len(b) > Max_PayloadOpReturnDataSize {
+		return nil, fmt.Errorf("invalid payload op return data length: %d, expected smaller than: %d", len(b), Max_PayloadOpReturnDataSize)
 	}
 	chainID := b[:chainIdBytes]
 	chainIdUserAddress := b[chainIdBytes : chainIdBytes+ChainIdUserAddressBytes]
@@ -109,12 +103,11 @@ func getPayloadOPReturnBytes(out *wire.TxOut) ([]byte, error) {
 		return nil, fmt.Errorf("nil tx output")
 	}
 
-	// We are adding `+3` as each op return has additional 3 for:
+	// We are adding `+2` as each op return has additional 3 for:
 	// 1. OP_RETURN opcode - which signalizes that data is provably unspendable
-	// 2. OP_PUSHDATA1 opcode - which pushes the next byte contains the number of bytes to be pushed onto the stack.
-	// 3. 0x50 - we define that in code is OP_80 which is the bytes number to be pushed onto the stack
-	if len(out.PkScript) != PayloadOpReturnDataSize+3 {
-		return nil, fmt.Errorf("invalid op return data length: %d, expected: %d", len(out.PkScript), PayloadOpReturnDataSize+3)
+	// 2. OP_PUSHBYTES_X opcode - which pushes the next byte contains the number of bytes to be pushed onto the stack.
+	if len(out.PkScript) > Max_PayloadOpReturnDataSize+2 {
+		return nil, fmt.Errorf("invalid op return data length: %d, expected: %d", len(out.PkScript), Max_PayloadOpReturnDataSize+2)
 	}
 	if !txscript.IsNullData(out.PkScript) {
 		return nil, fmt.Errorf("invalid op return script")
@@ -438,8 +431,7 @@ func ParseV0VaultTx(
 	if !bytes.Equal(tx.TxOut[0].PkScript, vaultInfo.VaultOutput.PkScript) {
 		return nil, fmt.Errorf("transaction does not have expected vault output with format at index 0")
 	}
-	var vaultOutput *wire.TxOut
-	vaultOutput = tx.TxOut[0]
+	var vaultOutput *wire.TxOut = tx.TxOut[0]
 	vaultOutputIdx := 0
 
 	// fmt.Println(vaultInfo.burnPathLeafHash)
