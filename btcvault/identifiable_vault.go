@@ -18,11 +18,11 @@ import (
 const (
 	TagLen                           = 4
 	V0OpReturnDataSize               = 69
-	Max_PayloadOpReturnDataSize      = 64
+	Max_PayloadOpReturnDataSize      = 56
 	chainIdBytes                     = 8
 	ChainIdUserAddressBytes          = 20
 	ChainIdSmartContractAddressBytes = 20
-	AmountBytes                      = 16
+	AmountBytes                      = 8
 
 	v0OpReturnCreationErrMsg = "cannot create V0 op_return data"
 )
@@ -67,8 +67,8 @@ func NewPayloadOpReturnData(
 	if len(chainIdSmartContractAddress) != ChainIdSmartContractAddressBytes {
 		return nil, fmt.Errorf("invalid chain id smart contract address length: %d, expected: %d", len(chainIdSmartContractAddress), ChainIdSmartContractAddressBytes)
 	}
-	if len(amount) > AmountBytes {
-		return nil, fmt.Errorf("invalid amount length: %d, expected smaller than: %d", len(amount), AmountBytes)
+	if len(amount) != AmountBytes {
+		return nil, fmt.Errorf("invalid amount length: %d, expected: %d", len(amount), AmountBytes)
 	}
 	return NewPayloadOpReturnDataFromParsed(chainID, chainIdUserAddress, chainIdSmartContractAddress, amount)
 }
@@ -88,8 +88,8 @@ func NewPayloadOpReturnDataFromParsed(
 }
 
 func NewPayloadOpReturnDataFromBytes(b []byte) (*PayloadOpReturnData, error) {
-	if len(b) > Max_PayloadOpReturnDataSize {
-		return nil, fmt.Errorf("invalid payload op return data length: %d, expected smaller than: %d", len(b), Max_PayloadOpReturnDataSize)
+	if len(b) != Max_PayloadOpReturnDataSize {
+		return nil, fmt.Errorf("invalid payload op return data length: %d, expected: %d", len(b), Max_PayloadOpReturnDataSize)
 	}
 	chainID := b[:chainIdBytes]
 	chainIdUserAddress := b[chainIdBytes : chainIdBytes+ChainIdUserAddressBytes]
@@ -106,7 +106,7 @@ func getPayloadOPReturnBytes(out *wire.TxOut) ([]byte, error) {
 	// We are adding `+2` as each op return has additional 3 for:
 	// 1. OP_RETURN opcode - which signalizes that data is provably unspendable
 	// 2. OP_PUSHBYTES_X opcode - which pushes the next byte contains the number of bytes to be pushed onto the stack.
-	if len(out.PkScript) > Max_PayloadOpReturnDataSize+2 {
+	if len(out.PkScript) != Max_PayloadOpReturnDataSize+2 {
 		return nil, fmt.Errorf("invalid op return data length: %d, expected: %d", len(out.PkScript), Max_PayloadOpReturnDataSize+2)
 	}
 	if !txscript.IsNullData(out.PkScript) {
