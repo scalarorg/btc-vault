@@ -14,8 +14,9 @@ import (
 )
 
 var (
-	errBuildingVaultInfo   = fmt.Errorf("error building vault info")
-	errBuildingBurningInfo = fmt.Errorf("error building burning info")
+	errBuildingVaultInfo    = fmt.Errorf("error building vault info")
+	errBuildingBurningInfo  = fmt.Errorf("error building burning info")
+	errBuildingSpendingInfo = fmt.Errorf("error building spending info")
 )
 
 type scalarScriptPaths struct {
@@ -23,7 +24,7 @@ type scalarScriptPaths struct {
 	// <Minter_PK> OP_CHECKSIGVERIFY
 	// <dApp_PK> OP_CHECKSIGVERIFY
 	// <Covenant_PK1> OP_CHECKSIG ... <Covenant_PKN> OP_CHECKSIGADD M OP_NUMEQUAL
-	burnPathScript []byte
+	burningPathScript []byte
 	// slashingOrLostKeyPathScript is the script path for slashing or minter lost key
 	// <Minter_PK> OP_CHECKSIGVERIFY
 	// <Covenant_PK1> OP_CHECKSIG ... <Covenant_PKN> OP_CHECKSIGADD M OP_GREATERTHANOREQUAL
@@ -102,7 +103,7 @@ func newScalarScriptPaths(
 	)
 
 	return &scalarScriptPaths{
-		burnPathScript:              burningPathScript,
+		burningPathScript:           burningPathScript,
 		slashingOrLostKeyPathScript: slashingOrLostKeyPathScript,
 		burnWithoutDAppPathScript:   burningWithoutDAppPathScript,
 	}, nil
@@ -150,11 +151,11 @@ func BuildVaultInfo(
 	}
 
 	var unbondingPaths [][]byte
-	unbondingPaths = append(unbondingPaths, scalarScripts.burnPathScript)
+	unbondingPaths = append(unbondingPaths, scalarScripts.burningPathScript)
 	unbondingPaths = append(unbondingPaths, scalarScripts.slashingOrLostKeyPathScript)
 	unbondingPaths = append(unbondingPaths, scalarScripts.burnWithoutDAppPathScript)
 
-	burnPathLeafHash := txscript.NewBaseTapLeaf(scalarScripts.burnPathScript).TapHash()
+	burnPathLeafHash := txscript.NewBaseTapLeaf(scalarScripts.burningPathScript).TapHash()
 	slashingOrLostKeyPathLeafHash := txscript.NewBaseTapLeaf(scalarScripts.slashingOrLostKeyPathScript).TapHash()
 	burnWithoutDAppPathLeafHash := txscript.NewBaseTapLeaf(scalarScripts.burnWithoutDAppPathScript).TapHash()
 
@@ -196,21 +197,21 @@ func (i *VaultInfo) BurnWithoutDAppPathSpendInfo() (*SpendInfo, error) {
 	return i.scriptHolder.scriptSpendInfoByName(i.burnWithoutDAppPathLeafHash)
 }
 
-type BurningInfo struct {
-	BurningOutput               *wire.TxOut
-	scriptHolder                *taprootScriptHolder
-	burningPathLeafHash         chainhash.Hash
-	burnWithoutDAppPathLeafHash chainhash.Hash
+type SpendPathInfo struct {
+	Output       *wire.TxOut
+	scriptHolder *taprootScriptHolder
+	pathLeafHash chainhash.Hash
 }
 
-func BuildBurningInfo(
+func BuildSpendingInfo(
+	typeOfSpend int,
 	stakerKey *btcec.PublicKey,
 	dAppKeys []*btcec.PublicKey,
 	covenantKeys []*btcec.PublicKey,
 	covenantQuorum uint32,
 	burningAmount btcutil.Amount,
 	net *chaincfg.Params,
-) (*BurningInfo, error) {
+) (*SpendPathInfo, error) {
 	unspendableKeyPathKey := unspendableKeyPathInternalPubKey()
 
 	scalarScripts, err := newScalarScriptPaths(
@@ -224,42 +225,47 @@ func BuildBurningInfo(
 		return nil, fmt.Errorf("%s: %w", errBuildingBurningInfo, err)
 	}
 
-	var burningPaths [][]byte
-	burningPaths = append(burningPaths, scalarScripts.burnPathScript)
-	burningPaths = append(burningPaths, scalarScripts.burnWithoutDAppPathScript)
+	var spendingPaths [][]byte
+	var pathLeafHash chainhash.Hash
 
-	burningPathLeafHash := txscript.NewBaseTapLeaf(scalarScripts.burnPathScript).TapHash()
-	burnWithoutDAppLeafHash := txscript.NewBaseTapLeaf(scalarScripts.burnWithoutDAppPathScript).TapHash()
+	if typeOfSpend == 0 {
+		spendingPaths = append(spendingPaths, scalarScripts.burningPathScript)
+		pathLeafHash = txscript.NewBaseTapLeaf(scalarScripts.burningPathScript).TapHash()
+
+	} else if typeOfSpend == 1 {
+		spendingPaths = append(spendingPaths, scalarScripts.slashingOrLostKeyPathScript)
+		pathLeafHash = txscript.NewBaseTapLeaf(scalarScripts.slashingOrLostKeyPathScript).TapHash()
+	} else if typeOfSpend == 2 {
+		spendingPaths = append(spendingPaths, scalarScripts.burnWithoutDAppPathScript)
+		pathLeafHash = txscript.NewBaseTapLeaf(scalarScripts.burnWithoutDAppPathScript).TapHash()
+	} else {
+		return nil, fmt.Errorf("invalid type of spend")
+	}
 
 	sh, err := newTaprootScriptHolder(
 		&unspendableKeyPathKey,
-		burningPaths,
+		spendingPaths,
 	)
 
 	if err != nil {
-		return nil, fmt.Errorf("%s: %w", errBuildingBurningInfo, err)
+		return nil, fmt.Errorf("%s: %w", errBuildingSpendingInfo, err)
 	}
 
 	taprootPkScript, err := sh.taprootPkScript(net)
 
 	if err != nil {
-		return nil, fmt.Errorf("%s: %w", errBuildingBurningInfo, err)
+		return nil, fmt.Errorf("%s: %w", errBuildingSpendingInfo, err)
 	}
 
-	unbondingOutput := wire.NewTxOut(int64(burningAmount), taprootPkScript)
+	spendingOutput := wire.NewTxOut(int64(burningAmount), taprootPkScript)
 
-	return &BurningInfo{
-		BurningOutput:               unbondingOutput,
-		scriptHolder:                sh,
-		burningPathLeafHash:         burningPathLeafHash,
-		burnWithoutDAppPathLeafHash: burnWithoutDAppLeafHash,
+	return &SpendPathInfo{
+		Output:       spendingOutput,
+		scriptHolder: sh,
+		pathLeafHash: pathLeafHash,
 	}, nil
 }
 
-func (i *BurningInfo) BurningPathSpendInfo() (*SpendInfo, error) {
-	return i.scriptHolder.scriptSpendInfoByName(i.burningPathLeafHash)
-}
-
-func (i *BurningInfo) BurnWithoutDAppPathSpendInfo() (*SpendInfo, error) {
-	return i.scriptHolder.scriptSpendInfoByName(i.burnWithoutDAppPathLeafHash)
+func (i *SpendPathInfo) PathSpendInfo() (*SpendInfo, error) {
+	return i.scriptHolder.scriptSpendInfoByName(i.pathLeafHash)
 }
